@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0f766e">
+<title>Take Stock — Pantry Tracker</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<style>
+:root{--bg:#f4f7f6;--card:#fff;--text:#14201d;--muted:#5b6b66;--line:#d8e2de;--teal:#0f766e;--teal2:#e6f4f1;--amber:#fef3c7;--amber-t:#92400e;--red:#fee2e2;--red-t:#991b1b;--green:#dcfce7;--green-t:#166534}
+[data-theme="dark"]{--bg:#101816;--card:#1a2622;--text:#eef5f2;--muted:#a8bab3;--line:#2e423c;--teal:#2dd4bf;--teal2:#143832;--amber:#3a2c0a;--amber-t:#fcd34d;--red:#3f1414;--red-t:#fca5a5;--green:#12351f;--green-t:#86efac}
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:var(--bg);color:var(--text);line-height:1.45}
+header{background:var(--teal);color:#fff;padding:20px 16px 16px}
+header h1{margin:0;font-size:28px}
+header p{margin:4px 0 0;opacity:.92}
+main{max-width:760px;margin:0 auto;padding:16px}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:16px 0}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 8px;text-align:center}
+.stat b{display:block;font-size:22px}
+.stat span{font-size:12px;color:var(--muted)}
+.tabs{display:flex;gap:8px;margin:4px 0 16px}
+.tabs button{flex:1;padding:12px;border:1px solid var(--line);background:var(--card);color:var(--text);border-radius:10px;font-size:16px;cursor:pointer}
+.tabs button.active{background:var(--teal);color:#fff;border-color:var(--teal)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:14px}
+h2{margin:0 0 12px;font-size:20px}
+label{display:block;font-size:14px;color:var(--muted);margin:10px 0 4px}
+input,select,textarea{width:100%;padding:12px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--text);font-size:16px}
+textarea{resize:vertical;min-height:56px}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.btn{background:var(--teal);color:#fff;border:0;border-radius:10px;padding:12px 16px;font-size:16px;cursor:pointer;min-height:44px}
+.btn.secondary{background:transparent;color:var(--teal);border:1px solid var(--teal)}
+.btn.danger{background:transparent;color:var(--red-t);border:1px solid var(--line)}
+.btn.small{padding:8px 12px;min-height:40px;font-size:15px}
+.search{margin-bottom:10px}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}
+.chips button{padding:9px 13px;border-radius:999px;border:1px solid var(--line);background:var(--card);color:var(--text);cursor:pointer;font-size:15px}
+.chips button.active{background:var(--teal);color:#fff;border-color:var(--teal)}
+.item{border:1px solid var(--line);border-radius:12px;padding:13px;margin-bottom:10px}
+.item-top{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+.item-top b{font-size:18px}
+.qty{font-size:18px;font-weight:700;white-space:nowrap}
+.meta{color:var(--muted);font-size:14px;margin-top:2px}
+.badges{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.badge{font-size:13px;padding:3px 9px;border-radius:999px;background:var(--teal2)}
+.badge.warn{background:var(--amber);color:var(--amber-t)}
+.badge.bad{background:var(--red);color:var(--red-t)}
+.badge.ok{background:var(--green);color:var(--green-t)}
+.actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:11px}
+.actions button{flex:1}
+.empty{color:var(--muted);text-align:center;padding:24px 8px}
+.shop{display:flex;gap:10px;align-items:center;border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:10px}
+.shop input[type="checkbox"]{width:24px;height:24px;flex:none}
+.shop .done{color:var(--muted);text-decoration:line-through}
+.hidden{display:none!important}
+.note{color:var(--muted);font-size:14px}
+@media(max-width:520px){.stats{grid-template-columns:repeat(2,1fr)}.row{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header>
+<h1>Take Stock</h1>
+<p>What you have, what is running low, and what to use first. Nothing leaves your device.</p>
+</header>
+<main>
+<div class="stats" id="stats"></div>
+
+<div class="tabs">
+<button type="button" data-tab="stock" class="active">Stock</button>
+<button type="button" data-tab="shopping">Shopping list</button>
+<button type="button" data-tab="settings">Settings</button>
+</div>
+
+<section id="panel-stock">
+<div class="card">
+<button type="button" class="btn" id="toggleForm" style="width:100%">+ Add an item</button>
+<form id="itemForm" class="hidden" autocomplete="off">
+<input type="hidden" id="editId">
+<label for="fName">Item name *</label>
+<input id="fName" required placeholder="e.g. Rice, tinned tomatoes, oats">
+<div class="row">
+<div><label for="fQty">Quantity</label><input id="fQty" type="number" min="0" step="any" value="1"></div>
+<div><label for="fUnit">Unit</label>
+<select id="fUnit"><option>pcs</option><option>bags</option><option>boxes</option><option>cans</option><option>packs</option><option>jars</option><option>bottles</option><option>g</option><option>kg</option><option>ml</option><option>L</option></select></div>
+</div>
+<div class="row">
+<div><label for="fCategory">Category</label>
+<select id="fCategory"><option>Grains &amp; pasta</option><option>Canned &amp; jarred</option><option>Baking</option><option>Snacks</option><option>Frozen</option><option>Drinks</option><option>Condiments</option><option>Spices</option><option>Other</option></select></div>
+<div><label for="fLocation">Location</label>
+<select id="fLocation"><option>Pantry</option><option>Freezer</option><option>Fridge</option><option>Cupboard</option><option>Garage</option><option>Other</option></select></div>
+</div>
+<div class="row">
+<div><label for="fExpiry">Use by / expiry (optional)</label><input id="fExpiry" type="date"></div>
+<div><label for="fLow">Low-stock warning at</label><input id="fLow" type="number" min="0" step="any" value="1"></div>
+</div>
+<label for="fNotes">Notes (optional)</label>
+<textarea id="fNotes" placeholder="e.g. bought on offer, keep for soup"></textarea>
+<div class="row" style="margin-top:14px">
+<button type="submit" class="btn">Save item</button>
+<button type="button" class="btn secondary" id="cancelForm">Cancel</button>
+</div>
+</form>
+</div>
+
+<div class="card">
+<label for="search">Search</label>
+<input id="search" class="search" placeholder="Search name, category, or notes">
+<div class="row">
+<div><label for="locFilter">Location</label>
+<select id="locFilter"><option value="All">All locations</option><option>Pantry</option><option>Freezer</option><option>Fridge</option><option>Cupboard</option><option>Garage</option><option>Other</option></select></div>
+<div><label for="sortBy">Sort by</label>
+<select id="sortBy"><option value="usefirst">Use first</option><option value="name">Name A–Z</option><option value="expiry">Expiry date</option><option value="qty">Lowest quantity</option></select></div>
+</div>
+<div class="chips" id="statusChips">
+<button type="button" data-status="all" class="active">All</button>
+<button type="button" data-status="low">Low stock</button>
+<button type="button" data-status="expiring">Expiring soon</button>
+<button type="button" data-status="expired">Expired</button>
+</div>
+</div>
+
+<div id="stockList"></div>
+</section>
+
+<section id="panel-shopping" class="hidden">
+<div class="card">
+<h2>Shopping list</h2>
+<p class="note">Tick things off as you buy them. Low-stock items can be added in one tap below.</p>
+<button type="button" class="btn secondary" id="addLowToList" style="width:100%;margin-bottom:14px">Add all low-stock items</button>
+<form id="shopForm" autocomplete="off">
+<label for="sName">Add to list</label>
+<input id="sName" required placeholder="e.g. Oats">
+<div class="row" style="margin-top:10px">
+<div><label for="sQty">Quantity</label><input id="sQty" type="number" min="0" step="any" value="1"></div>
+<div><label>&nbsp;</label><button type="submit" class="btn" style="width:100%">Add</button></div>
+</div>
+</form>
+</div>
+<div id="shopList"></div>
+<div class="card" id="shopActionsCard">
+<button type="button" class="btn secondary" id="clearBought" style="width:100%">Clear ticked items</button>
+</div>
+</section>
+
+<section id="panel-settings" class="hidden">
+<div class="card">
+<h2>Appearance</h2>
+<div class="row">
+<button type="button" class="btn secondary" id="themeLight">Light theme</button>
+<button type="button" class="btn secondary" id="themeDark">Dark theme</button>
+</div>
+</div>
+<div class="card" id="installCard">
+<h2>Install &amp; offline</h2>
+<p class="note" id="installNote">If your browser offers it, you can install Take Stock to your home screen and use it offline.</p>
+<button type="button" class="btn hidden" id="installBtn">Install app</button>
+<p class="note" id="offlineNote"></p>
+</div>
+<div class="card">
+<h2>Your data</h2>
+<p class="note">Everything is stored only in this browser on this device. Export a backup before clearing browser data.</p>
+<div class="row">
+<button type="button" class="btn secondary" id="exportBtn">Export backup</button>
+<button type="button" class="btn secondary" id="importBtn">Import backup</button>
+</div>
+<input type="file" id="importFile" accept="application/json,.json" class="hidden">
+<button type="button" class="btn danger" id="eraseBtn" style="width:100%;margin-top:12px">Erase everything</button>
+</div>
+</section>
+</main>
+<script>
+const KEY = 'take-stock-v1';
+let data = load();
+let statusFilter = 'all';
+let deferredPrompt = null;
+
+function load() {
+  try {
+    const raw = localStorage.getItem(KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && Array.isArray(parsed.items) && Array.isArray(parsed.shopping)) return parsed;
+    }
+  } catch (e) {}
+  return { items: [], shopping: [], theme: 'light' };
+}
+function save() { localStorage.setItem(KEY, JSON.stringify(data)); }
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+  });
+}
+function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
+function fmtQty(n) {
+  const v = Number(n);
+  if (!isFinite(v)) return '0';
+  return String(Math.round(v * 100) / 100);
+}
+function todayMidnight() { const d = new Date(); d.setHours(0, 0, 0, 0); return d; }
+function parseDate(str) {
+  if (!str) return null;
+  const parts = str.split('-');
+  if (parts.length !== 3) return null;
+  const d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+  return isNaN(d.getTime()) ? null : d;
+}
+function daysUntil(expiryStr) {
+  const d = parseDate(expiryStr);
+  if (!d) return null;
+  return Math.round((d.getTime() - todayMidnight().getTime()) / 86400000);
+}
+function expiryInfo(item) {
+  const days = daysUntil(item.expiry);
+  if (days === null) return { label: 'No expiry date', cls: '' };
+  if (days < 0) return { label: 'Expired ' + Math.abs(days) + (Math.abs(days) === 1 ? ' day' : ' days') + ' ago', cls: 'bad', expired: true };
+  if (days === 0) return { label: 'Use today', cls: 'warn', expiring: true };
+  if (days <= 7) return { label: 'Use within ' + days + (days === 1 ? ' day' : ' days'), cls: 'warn', expiring: true };
+  return { label: 'Good for ' + days + ' days', cls: 'ok' };
+}
+function isLow(item) { return Number(item.qty) <= Number(item.low == null ? 1 : item.low); }
+
+function renderStats() {
+  const expiring = data.items.filter(function (i) { const e = expiryInfo(i); return e.expiring; }).length;
+  const expired = data.items.filter(function (i) { return expiryInfo(i).expired; }).length;
+  const low = data.items.filter(isLow).length;
+  document.getElementById('stats').innerHTML =
+    '<div class="stat"><b>' + data.items.length + '</b><span>Items</span></div>' +
+    '<div class="stat"><b>' + low + '</b><span>Low stock</span></div>' +
+    '<div class="stat"><b>' + expiring + '</b><span>Expiring soon</span></div>' +
+    '<div class="stat"><b>' + expired + '</b><span>Expired</span></div>';
+}
+
+function filteredItems() {
+  const q = document.getElementById('search').value.trim().toLowerCase();
+  const loc = document.getElementById('locFilter').value;
+  const sort = document.getElementById('sortBy').value;
+  let list = data.items.filter(function (item) {
+    if (loc !== 'All' && item.location !== loc) return false;
+    if (q && !(item.name.toLowerCase().includes(q) || (item.category || '').toLowerCase().includes(q) || (item.notes || '').toLowerCase().includes(q))) return false;
+    if (statusFilter === 'low' && !isLow(item)) return false;
+    if (statusFilter === 'expiring' && !expiryInfo(item).expiring) return false;
+    if (statusFilter === 'expired' && !expiryInfo(item).expired) return false;
+    return true;
+  });
+  list.sort(function (a, b) {
+    if (sort === 'name') return a.name.localeCompare(b.name);
+    if (sort === 'qty') return Number(a.qty) - Number(b.qty);
+    if (sort === 'expiry') {
+      const da = daysUntil(a.expiry), db = daysUntil(b.expiry);
+      if (da === null && db === null) return a.name.localeCompare(b.name);
+      if (da === null) return 1;
+      if (db === null) return -1;
+      return da - db;
+    }
+    const ea = expiryInfo(a), eb = expiryInfo(b);
+    const ra = ea.expired ? 0 : (ea.expiring ? 1 : (a.expiry ? 2 : 3));
+    const rb = eb.expired ? 0 : (eb.expiring ? 1 : (b.expiry ? 2 : 3));
+    if (ra !== rb) return ra - rb;
+    const da = daysUntil(a.expiry), db = daysUntil(b.expiry);
+    if (da !== null && db !== null && da !== db) return da - db;
+    return a.name.localeCompare(b.name);
+  });
+  return list;
+}
+
+function renderStock() {
+  renderStats();
+  const list = filteredItems();
+  const el = document.getElementById('stockList');
+  if (!list.length) {
+    el.innerHTML = '<div class="card empty">Nothing here yet. Add your first item above, or try a different filter.</div>';
+    return;
+  }
+  el.innerHTML = list.map(function (item) {
+    const info = expiryInfo(item);
+    const low = isLow(item);
+    return '<div class="item">' +
+      '<div class="item-top"><div><b>' + esc(item.name) + '</b>' +
+      '<div class="meta">' + esc(item.category) + ' · ' + esc(item.location) + (item.notes ? ' · ' + esc(item.notes) : '') + '</div></div>' +
+      '<div class="qty">' + fmtQty(item.qty) + ' ' + esc(item.unit) + '</div></div>' +
+      '<div class="badges">' +
+      (info.label ? '<span class="badge ' + info.cls + '">' + esc(info.label) + '</span>' : '') +
+      (item.expiry ? '<span class="badge">' + esc(item.expiry) + '</span>' : '') +
+      (low ? '<span class="badge warn">Low stock</span>' : '') +
+      '</div>' +
+      '<div class="actions">' +
+      '<button type="button" class="btn small secondary" data-action="minus" data-id="' + item.id + '">− 1</button>' +
+      '<button type="button" class="btn small secondary" data-action="plus" data-id="' + item.id + '">+ 1</button>' +
+      '<button type="button" class="btn small secondary" data-action="edit" data-id="' + item.id + '">Edit</button>' +
+      '<button type="button" class="btn small danger" data-action="delete" data-id="' + item.id + '">Delete</button>' +
+      '</div></div>';
+  }).join('');
+}
+
+function renderShopping() {
+  const el = document.getElementById('shopList');
+  if (!data.shopping.length) {
+    el.innerHTML = '<div class="card empty">Your shopping list is empty.</div>';
+    return;
+  }
+  el.innerHTML = data.shopping.map(function (item) {
+    return '<div class="shop"><input type="checkbox" ' + (item.done ? 'checked' : '') + ' data-shop="' + item.id + '">' +
+      '<div style="flex:1" class="' + (item.done ? 'done' : '') + '"><b>' + esc(item.name) + '</b> · ' + fmtQty(item.qty) + '</div>' +
+      '<button type="button" class="btn small danger" data-shop-del="' + item.id + '">Delete</button></div>';
+  }).join('');
+}
+
+function renderAll() { renderStock(); renderShopping(); applyTheme(); }
+
+function applyTheme() {
+  document.documentElement.setAttribute('data-theme', data.theme === 'dark' ? 'dark' : 'light');
+}
+
+function openForm(item) {
+  const form = document.getElementById('itemForm');
+  form.classList.remove('hidden');
+  document.getElementById('toggleForm').textContent = 'Close form';
+  if (item) {
+    document.getElementById('editId').value = item.id;
+    document.getElementById('fName').value = item.name;
+    document.getElementById('fQty').value = item.qty;
+    document.getElementById('fUnit').value = item.unit;
+    document.getElementById('fCategory').value = item.category;
+    document.getElementById('fLocation').value = item.location;
+    document.getElementById('fExpiry').value = item.expiry || '';
+    document.getElementById('fLow').value = item.low;
+    document.getElementById('fNotes').value = item.notes || '';
+  } else {
+    document.getElementById('editId').value = '';
+    form.reset();
+    document.getElementById('fQty').value = '1';
+    document.getElementById('fLow').value = '1';
+  }
+  document.getElementById('fName').focus();
+}
+function closeForm() {
+  document.getElementById('itemForm').classList.add('hidden');
+  document.getElementById('toggleForm').textContent = '+ Add an item';
+}
+
+document.getElementById('toggleForm').addEventListener('click', function () {
+  if (document.getElementById('itemForm').classList.contains('hidden')) openForm(null); else closeForm();
+});
+document.getElementById('cancelForm').addEventListener('click', closeForm);
+
+document.getElementById('itemForm').addEventListener('submit', function (e) {
+  e.preventDefault();
+  const name = document.getElementById('fName').value.trim();
+  if (!name) return;
+  const editId = document.getElementById('editId').value;
+  const obj = {
+    id: editId || uid(), name: name,
+    qty: Math.max(0, Number(document.getElementById('fQty').value) || 0),
+    unit: document.getElementById('fUnit').value,
+    category: document.getElementById('fCategory').value,
+    location: document.getElementById('fLocation').value,
+    expiry: document.getElementById('fExpiry').value || '',
+    low: Math.max(0, Number(document.getElementById('fLow').value) || 0),
+    notes: document.getElementById('fNotes').value.trim()
+  };
+  if (editId) {
+    const idx = data.items.findIndex(function (i) { return i.id === editId; });
+    if (idx >= 0) data.items[idx] = obj;
+  } else {
+    data.items.push(obj);
+  }
+  save(); closeForm(); renderAll();
+});
+
+document.getElementById('stockList').addEventListener('click', function (e) {
+  const btn = e.target.closest('button[data-action]');
+  if (!btn) return;
+  const item = data.items.find(function (i) { return i.id === btn.getAttribute('data-id'); });
+  if (!item) return;
+  const action = btn.getAttribute('data-action');
+  if (action === 'plus') item.qty = Number(item.qty) + 1;
+  if (action === 'minus') item.qty = Math.max(0, Number(item.qty) - 1);
+  if (action === 'edit') { openForm(item); return; }
+  if (action === 'delete') {
+    if (!confirm('Delete "' + item.name + '"?')) return;
+    data.items = data.items.filter(function (i) { return i.id !== item.id; });
+  }
+  save(); renderAll();
+});
+
+document.getElementById('search').addEventListener('input', renderStock);
+document.getElementById('locFilter').addEventListener('change', renderStock);
+document.getElementById('sortBy').addEventListener('change', renderStock);
+document.getElementById('statusChips').addEventListener('click', function (e) {
+  const btn = e.target.closest('button[data-status]');
+  if (!btn) return;
+  statusFilter = btn.getAttribute('data-status');
+  document.querySelectorAll('#statusChips button').forEach(function (b) { b.classList.toggle('active', b === btn); });
+  renderStock();
+});
+
+document.querySelectorAll('.tabs button').forEach(function (btn) {
+  btn.addEventListener('click', function () {
+    document.querySelectorAll('.tabs button').forEach(function (b) { b.classList.toggle('active', b === btn); });
+    ['stock', 'shopping', 'settings'].forEach(function (p) {
+      document.getElementById('panel-' + p).classList.toggle('hidden', p !== btn.getAttribute('data-tab'));
+    });
+  });
+});
+
+document.getElementById('shopForm').addEventListener('submit', function (e) {
+  e.preventDefault();
+  const name = document.getElementById('sName').value.trim();
+  if (!name) return;
+  data.shopping.push({ id: uid(), name: name, qty: Math.max(0, Number(document.getElementById('sQty').value) || 0), done: false });
+  document.getElementById('sName').value = '';
+  document.getElementById('sQty').value = '1';
+  save(); renderShopping();
+});
+document.getElementById('shopList').addEventListener('change', function (e) {
+  const id = e.target.getAttribute('data-shop');
+  if (!id) return;
+  const item = data.shopping.find(function (i) { return i.id === id; });
+  if (item) { item.done = e.target.checked; save(); renderShopping(); }
+});
+document.getElementById('shopList').addEventListener('click', function (e) {
+  const btn = e.target.closest('button[data-shop-del]');
+  if (!btn) return;
+  data.shopping = data.shopping.filter(function (i) { return i.id !== btn.getAttribute('data-shop-del'); });
+  save(); renderShopping();
+});
+document.getElementById('addLowToList').addEventListener('click', function () {
+  let added = 0;
+  data.items.filter(isLow).forEach(function (item) {
+    const exists = data.shopping.some(function (s) { return s.name.toLowerCase() === item.name.toLowerCase(); });
+    if (!exists) { data.shopping.push({ id: uid(), name: item.name, qty: 1, done: false }); added++; }
+  });
+  save(); renderShopping();
+  alert(added ? added + ' low-stock item(s) added to your shopping list.' : 'No new low-stock items to add.');
+});
+document.getElementById('clearBought').addEventListener('click', function () {
+  data.shopping = data.shopping.filter(function (i) { return !i.done; });
+  save(); renderShopping();
+});
+
+document.getElementById('themeLight').addEventListener('click', function () { data.theme = 'light'; save(); applyTheme(); });
+document.getElementById('themeDark').addEventListener('click', function () { data.theme = 'dark'; save(); applyTheme(); });
+document.getElementById('exportBtn').addEventListener('click', function () {
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'take-stock-backup-' + new Date().toISOString().slice(0, 10) + '.json';
+  a.click();
+  setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
+});
+document.getElementById('importBtn').addEventListener('click', function () { document.getElementById('importFile').click(); });
+document.getElementById('importFile').addEventListener('change', function (e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function () {
+    try {
+      const parsed = JSON.parse(reader.result);
+      if (!parsed || !Array.isArray(parsed.items) || !Array.isArray(parsed.shopping)) throw new Error('bad file');
+      if (!confirm('Replace all current stock and shopping list with this backup?')) return;
+      data = parsed;
+      if (!data.theme) data.theme = 'light';
+      save(); renderAll();
+      alert('Backup imported.');
+    } catch (err) { alert('That file does not look like a Take Stock backup.'); }
+  };
+  reader.readAsText(file);
+  e.target.value = '';
+});
+document.getElementById('eraseBtn').addEventListener('click', function () {
+  if (!confirm('Erase all stock, shopping list, and settings? This cannot be undone. Export a backup first if you want to keep it.')) return;
+  data = { items: [], shopping: [], theme: 'light' };
+  save(); renderAll();
+});
+
+window.addEventListener('beforeinstallprompt', function (e) {
+  e.preventDefault();
+  deferredPrompt = e;
+  document.getElementById('installBtn').classList.remove('hidden');
+});
+document.getElementById('installBtn').addEventListener('click', function () {
+  if (deferredPrompt) { deferredPrompt.prompt(); deferredPrompt = null; }
+});
+if (window.matchMedia('(display-mode: standalone)').matches) {
+  document.getElementById('installNote').textContent = 'Installed — you are using the installed app.';
+}
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function () {
+    navigator.serviceWorker.register('sw.js').catch(function () {});
+  });
+}
+document.getElementById('offlineNote').textContent = navigator.onLine ? 'You are online.' : 'You are offline — your saved stock is still available.';
+
+renderAll();
+</script>
+</body>
+</html>
