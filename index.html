@@ -167,6 +167,12 @@ textarea{resize:vertical;min-height:56px}
 <input type="file" id="importFile" accept="application/json,.json" class="hidden">
 <button type="button" class="btn danger" id="eraseBtn" style="width:100%;margin-top:12px">Erase everything</button>
 </div>
+<div class="card">
+<h2>Shared data (Pi version)</h2>
+<p class="note" id="piStatus">Checking for a Pi server…</p>
+<button type="button" class="btn secondary" id="refreshPiBtn" style="width:100%">Reload shared data from Pi</button>
+<p class="note">On the Pi version, everyone opening this address shares the same stock list. On GitHub Pages, this button will say no Pi server was found, and the app keeps using this browser only.</p>
+</div>
 </section>
 </main>
 <script>
@@ -185,7 +191,31 @@ function load() {
   } catch (e) {}
   return { items: [], shopping: [], theme: 'light' };
 }
-function save() { localStorage.setItem(KEY, JSON.stringify(data)); }
+let serverMode = false;
+function save() {
+  localStorage.setItem(KEY, JSON.stringify(data));
+  if (serverMode) {
+    fetch('/api/data', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }).catch(function () {});
+  }
+}
+function loadFromServer() {
+  const statusEl = document.getElementById('piStatus');
+  fetch('/api/data').then(function (r) {
+    if (!r.ok) throw new Error('no server');
+    return r.json();
+  }).then(function (parsed) {
+    if (parsed && Array.isArray(parsed.items) && Array.isArray(parsed.shopping)) {
+      data = parsed;
+      if (!data.theme) data.theme = 'light';
+      serverMode = true;
+      localStorage.setItem(KEY, JSON.stringify(data));
+      renderAll();
+      if (statusEl) statusEl.textContent = 'Connected to the Pi — this stock list is shared with everyone opening this address.';
+    }
+  }).catch(function () {
+    if (statusEl) statusEl.textContent = 'No Pi server found — using this browser only (GitHub Pages mode).';
+  });
+}
 function esc(s) {
   return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
     return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
@@ -492,7 +522,14 @@ if ('serviceWorker' in navigator) {
 }
 document.getElementById('offlineNote').textContent = navigator.onLine ? 'You are online.' : 'You are offline — your saved stock is still available.';
 
+document.getElementById('refreshPiBtn').addEventListener('click', function () {
+  loadFromServer();
+  setTimeout(function () {
+    if (!serverMode) alert('No Pi server found — this copy is still using this browser only.');
+  }, 1500);
+});
 renderAll();
+loadFromServer();
 </script>
 </body>
 </html>
