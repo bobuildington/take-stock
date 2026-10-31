@@ -53,6 +53,9 @@ textarea{resize:vertical;min-height:56px}
 .shop{display:flex;gap:10px;align-items:center;border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:10px}
 .shop input[type="checkbox"]{width:24px;height:24px;flex:none}
 .shop .done{color:var(--muted);text-decoration:line-through}
+.list-row{display:flex;gap:8px;align-items:center;border:1px solid var(--line);border-radius:10px;padding:9px 11px;margin-bottom:8px}
+.list-row b{flex:1;font-size:16px}
+.list-row .note{margin:0}
 .hidden{display:none!important}
 .note{color:var(--muted);font-size:14px}
 @media(max-width:520px){.stats{grid-template-columns:repeat(2,1fr)}.row{grid-template-columns:1fr}}
@@ -86,9 +89,13 @@ textarea{resize:vertical;min-height:56px}
 </div>
 <div class="row">
 <div><label for="fCategory">Category</label>
-<select id="fCategory"><option>Grains &amp; pasta</option><option>Canned &amp; jarred</option><option>Baking</option><option>Snacks</option><option>Frozen</option><option>Drinks</option><option>Condiments</option><option>Spices</option><option>Other</option></select></div>
+<select id="fCategory"><option>Other</option></select></div>
 <div><label for="fLocation">Location</label>
-<select id="fLocation"><option>Pantry</option><option>Freezer</option><option>Fridge</option><option>Cupboard</option><option>Garage</option><option>Other</option></select></div>
+<select id="fLocation"><option>Other</option></select></div>
+</div>
+<div class="row" style="margin-top:10px">
+<button type="button" class="btn secondary small" id="addCatFormBtn">+ New category</button>
+<button type="button" class="btn secondary small" id="addLocFormBtn">+ New location</button>
 </div>
 <div class="row">
 <div><label for="fExpiry">Use by / expiry (optional)</label><input id="fExpiry" type="date"></div>
@@ -108,7 +115,7 @@ textarea{resize:vertical;min-height:56px}
 <input id="search" class="search" placeholder="Search name, category, or notes">
 <div class="row">
 <div><label for="locFilter">Location</label>
-<select id="locFilter"><option value="All">All locations</option><option>Pantry</option><option>Freezer</option><option>Fridge</option><option>Cupboard</option><option>Garage</option><option>Other</option></select></div>
+<select id="locFilter"><option value="All">All locations</option><option>Other</option></select></div>
 <div><label for="sortBy">Sort by</label>
 <select id="sortBy"><option value="usefirst">Use first</option><option value="name">Name A–Z</option><option value="expiry">Expiry date</option><option value="qty">Lowest quantity</option></select></div>
 </div>
@@ -151,6 +158,20 @@ textarea{resize:vertical;min-height:56px}
 <button type="button" class="btn secondary" id="themeDark">Dark theme</button>
 </div>
 </div>
+<div class="card" id="catLocCard">
+<h2>Categories &amp; locations</h2>
+<p class="note">Start with just Other. Add your own below, or with the “+ New” buttons in the item form. Deleting one moves any items using it to Other. Other can never be deleted or renamed.</p>
+<label>Categories</label>
+<div id="catList"></div>
+<label for="newCat">New category</label>
+<input id="newCat" placeholder="e.g. Cleaning, Pet food">
+<button type="button" class="btn secondary" id="addCatBtn" style="width:100%;margin-top:10px">Add category</button>
+<label style="margin-top:18px">Locations</label>
+<div id="locList"></div>
+<label for="newLoc">New location</label>
+<input id="newLoc" placeholder="e.g. Shed, Kitchen shelf">
+<button type="button" class="btn secondary" id="addLocBtn" style="width:100%;margin-top:10px">Add location</button>
+</div>
 <div class="card" id="installCard">
 <h2>Install &amp; offline</h2>
 <p class="note" id="installNote">If your browser offers it, you can install Take Stock to your home screen and use it offline.</p>
@@ -191,6 +212,100 @@ function load() {
   } catch (e) {}
   return { items: [], shopping: [], theme: 'light' };
 }
+function cleanList(list) {
+  const seen = new Set(), out = [];
+  (Array.isArray(list) ? list : []).forEach(function (v) {
+    const t = String(v == null ? '' : v).trim();
+    if (!t) return;
+    const k = t.toLowerCase();
+    if (seen.has(k)) return;
+    seen.add(k); out.push(t);
+  });
+  if (!out.some(function (v) { return v.toLowerCase() === 'other'; })) out.push('Other');
+  return out;
+}
+function normalizeLists() {
+  data.categories = cleanList(data.categories);
+  data.locations = cleanList(data.locations);
+}
+function renderSettingsLists() {
+  function rows(list, kind) {
+    if (!list.length) return '<p class="note">None yet.</p>';
+    return list.map(function (name) {
+      const locked = name.toLowerCase() === 'other';
+      return '<div class="list-row"><b>' + esc(name) + '</b>' +
+        (locked ? '<span class="note">Always kept</span>' :
+          '<button type="button" class="btn small secondary" data-list-rename="' + kind + '" data-name="' + esc(name) + '">Rename</button>' +
+          '<button type="button" class="btn small danger" data-list-del="' + kind + '" data-name="' + esc(name) + '">Delete</button>') +
+        '</div>';
+    }).join('');
+  }
+  function usedRows(field, kind) {
+    const listed = (kind === 'cat' ? data.categories : data.locations).map(function (v) { return v.toLowerCase(); });
+    const used = [];
+    data.items.forEach(function (item) {
+      const v = item[field];
+      if (v && listed.indexOf(String(v).toLowerCase()) < 0 && used.indexOf(v) < 0) used.push(v);
+    });
+    if (!used.length) return '';
+    return '<p class="note">Used by existing items, but not in the list above:</p>' + used.map(function (name) {
+      return '<div class="list-row"><b>' + esc(name) + '</b>' +
+        '<button type="button" class="btn small danger" data-list-del="' + kind + '" data-name="' + esc(name) + '">Move to Other</button></div>';
+    }).join('');
+  }
+  document.getElementById('catList').innerHTML = rows(data.categories, 'cat') + usedRows('category', 'cat');
+  document.getElementById('locList').innerHTML = rows(data.locations, 'loc') + usedRows('location', 'loc');
+}
+function renderListOptions() {
+  normalizeLists();
+  const catSel = document.getElementById('fCategory'), locSel = document.getElementById('fLocation'), filt = document.getElementById('locFilter');
+  const catVal = catSel.value, locVal = locSel.value, filtVal = filt.value;
+  catSel.innerHTML = data.categories.map(function (c) { return '<option>' + esc(c) + '</option>'; }).join('');
+  locSel.innerHTML = data.locations.map(function (l) { return '<option>' + esc(l) + '</option>'; }).join('');
+  filt.innerHTML = '<option value="All">All locations</option>' + data.locations.map(function (l) { return '<option>' + esc(l) + '</option>'; }).join('');
+  if (data.categories.indexOf(catVal) >= 0) catSel.value = catVal;
+  if (data.locations.indexOf(locVal) >= 0) locSel.value = locVal;
+  filt.value = (filtVal === 'All' || data.locations.indexOf(filtVal) >= 0) ? filtVal : 'All';
+  renderSettingsLists();
+}
+function addListItem(kind, rawName) {
+  const name = String(rawName == null ? '' : rawName).trim();
+  if (!name) return false;
+  const list = kind === 'cat' ? data.categories : data.locations;
+  if (list.some(function (v) { return v.toLowerCase() === name.toLowerCase(); })) { alert('"' + name + '" is already in the list.'); return false; }
+  list.push(name);
+  save(); renderListOptions(); renderAll();
+  return true;
+}
+function deleteListItem(kind, name) {
+  if (String(name).toLowerCase() === 'other') return;
+  const field = kind === 'cat' ? 'category' : 'location';
+  const used = data.items.filter(function (i) { return i[field] === name; }).length;
+  if (used && !confirm('Delete "' + name + '"? ' + used + ' item(s) using it will move to Other.')) return;
+  data.items.forEach(function (i) { if (i[field] === name) i[field] = 'Other'; });
+  if (kind === 'cat') data.categories = data.categories.filter(function (v) { return v !== name; });
+  else data.locations = data.locations.filter(function (v) { return v !== name; });
+  save(); renderListOptions(); renderAll();
+}
+function renameListItem(kind, oldName) {
+  const raw = prompt('Rename "' + oldName + '" to:', oldName);
+  if (raw == null) return;
+  const name = raw.trim();
+  if (!name || name.toLowerCase() === String(oldName).toLowerCase()) return;
+  const list = kind === 'cat' ? data.categories : data.locations;
+  if (list.some(function (v) { return v.toLowerCase() === name.toLowerCase(); })) { alert('"' + name + '" is already in the list.'); return; }
+  const field = kind === 'cat' ? 'category' : 'location';
+  if (kind === 'cat') data.categories = data.categories.map(function (v) { return v === oldName ? name : v; });
+  else data.locations = data.locations.map(function (v) { return v === oldName ? name : v; });
+  data.items.forEach(function (i) { if (i[field] === oldName) i[field] = name; });
+  save(); renderListOptions(); renderAll();
+}
+function ensureFormOption(sel, value) {
+  if (!value) return;
+  if (!Array.from(sel.options).some(function (o) { return o.value === value; })) {
+    const opt = document.createElement('option'); opt.textContent = value; opt.value = value; sel.appendChild(opt);
+  }
+}
 let serverMode = false;
 function save() {
   localStorage.setItem(KEY, JSON.stringify(data));
@@ -209,6 +324,7 @@ function loadFromServer() {
       if (!data.theme) data.theme = 'light';
       serverMode = true;
       localStorage.setItem(KEY, JSON.stringify(data));
+      renderListOptions();
       renderAll();
       if (statusEl) statusEl.textContent = 'Connected to the Pi — this stock list is shared with everyone opening this address.';
     }
@@ -346,7 +462,10 @@ function openForm(item) {
   const form = document.getElementById('itemForm');
   form.classList.remove('hidden');
   document.getElementById('toggleForm').textContent = 'Close form';
+  renderListOptions();
   if (item) {
+    ensureFormOption(document.getElementById('fCategory'), item.category);
+    ensureFormOption(document.getElementById('fLocation'), item.location);
     document.getElementById('editId').value = item.id;
     document.getElementById('fName').value = item.name;
     document.getElementById('fQty').value = item.qty;
@@ -491,7 +610,7 @@ document.getElementById('importFile').addEventListener('change', function (e) {
       if (!confirm('Replace all current stock and shopping list with this backup?')) return;
       data = parsed;
       if (!data.theme) data.theme = 'light';
-      save(); renderAll();
+      save(); renderListOptions(); renderAll();
       alert('Backup imported.');
     } catch (err) { alert('That file does not look like a Take Stock backup.'); }
   };
@@ -500,8 +619,8 @@ document.getElementById('importFile').addEventListener('change', function (e) {
 });
 document.getElementById('eraseBtn').addEventListener('click', function () {
   if (!confirm('Erase all stock, shopping list, and settings? This cannot be undone. Export a backup first if you want to keep it.')) return;
-  data = { items: [], shopping: [], theme: 'light' };
-  save(); renderAll();
+  data = { items: [], shopping: [], theme: 'light', categories: ['Other'], locations: ['Other'] };
+  save(); renderListOptions(); renderAll();
 });
 
 window.addEventListener('beforeinstallprompt', function (e) {
@@ -522,12 +641,36 @@ if ('serviceWorker' in navigator) {
 }
 document.getElementById('offlineNote').textContent = navigator.onLine ? 'You are online.' : 'You are offline — your saved stock is still available.';
 
+document.getElementById('addCatBtn').addEventListener('click', function () {
+  const inp = document.getElementById('newCat');
+  if (addListItem('cat', inp.value)) inp.value = '';
+});
+document.getElementById('addLocBtn').addEventListener('click', function () {
+  const inp = document.getElementById('newLoc');
+  if (addListItem('loc', inp.value)) inp.value = '';
+});
+document.getElementById('addCatFormBtn').addEventListener('click', function () {
+  const name = prompt('New category name:');
+  if (name && addListItem('cat', name)) document.getElementById('fCategory').value = name.trim();
+});
+document.getElementById('addLocFormBtn').addEventListener('click', function () {
+  const name = prompt('New location name:');
+  if (name && addListItem('loc', name)) document.getElementById('fLocation').value = name.trim();
+});
+document.getElementById('catLocCard').addEventListener('click', function (e) {
+  const del = e.target.closest('button[data-list-del]');
+  const ren = e.target.closest('button[data-list-rename]');
+  if (del) deleteListItem(del.getAttribute('data-list-del'), del.getAttribute('data-name'));
+  else if (ren) renameListItem(ren.getAttribute('data-list-rename'), ren.getAttribute('data-name'));
+});
 document.getElementById('refreshPiBtn').addEventListener('click', function () {
   loadFromServer();
   setTimeout(function () {
     if (!serverMode) alert('No Pi server found — this copy is still using this browser only.');
   }, 1500);
 });
+normalizeLists();
+renderListOptions();
 renderAll();
 loadFromServer();
 </script>
